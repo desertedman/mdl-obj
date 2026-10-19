@@ -1,91 +1,194 @@
 #pragma once
 
+#ifndef SW_EOF
+#define SW_EOF (std::char_traits<char>::eof())
+
+#include <cctype>
 #include <fstream>
+#include <iosfwd>
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <vector>
+
+namespace desobj {
+struct Face {
+  int v;  // vertex
+  int vt; // tex coord
+  int vn; // normal
+
+  Face() : v(-1), vt(-1), vn(-1) {}
+};
 
 struct Obj {
   std::vector<float> vertices;
   std::vector<float> normals;
   std::vector<float> uv;
+  std::vector<Face> faces;
+};
+
+class StreamWrapper {
+public:
+  void PrintDebug() { std::cout << file.rdbuf(); }
+
+  bool OpenFile(const char *path) {
+    file.open(path);
+
+    if (!file) {
+      std::cerr << "ERROR: SW could not open file.\n";
+      return false;
+    }
+
+    return true;
+  }
+
+  bool IsValidChar(const char c) {
+    if (c == '+' || c == '-' || c == '/' || c == '.')
+      return true;
+
+    if (c == '#')
+      return false;
+
+    return std::isalnum(static_cast<unsigned char>(c));
+  }
+
+  bool IsSpace(const char c) {
+    if (c == ' ' || c == '\t' || c == '#')
+      return true;
+
+    return false;
+  }
+
+  auto SeekToNextChar(const char c) {
+    size_t offset = 0;
+    char currChar = PeekAtOffset(offset);
+
+    while (currChar != c) {
+      // Char not found
+      if (currChar == '\0' || currChar == SW_EOF) {
+      }
+      offset++;
+    }
+  }
+
+  auto SkipLine() {}
+
+  bool SkipAllSpace(bool skipLines = false) {
+    int currChar{-1};
+
+    do {
+      currChar = file.peek();
+
+      // check for EOF first; EOF can not fit into a char
+      if (currChar == std::ifstream::traits_type::eof()) {
+        std::cout << "end of file\n";
+        return false;
+      }
+
+      else if (currChar == '\n' && skipLines) {
+        file.ignore(1);
+      }
+
+      else if (currChar == '\n' && !skipLines) {
+        std::cout << "end of line\n";
+        break;
+      }
+
+      else if (IsSpace(currChar)) {
+        file.ignore(1);
+      }
+    }
+
+    while (IsSpace(currChar) || currChar == '\n');
+
+    return true;
+  }
+
+  // Returns '\0' if error, or 'std::char_traits<char>::eof()' (SW_EOF macro) if
+  // EOF
+  char PeekAtOffset(std::streampos offset) {
+    std::streampos origPos = file.tellg();
+
+    // tellg fails (file corrupt or closed)
+    if (origPos == std::streampos(-1))
+      return '\0';
+
+    // EOF
+    else if (origPos == std::streampos(-1))
+      return SW_EOF;
+
+    // Seek to offset relative to curr pos
+    file.seekg(offset, std::ios::cur);
+    auto peekChar = file.peek();
+
+    // Clear EOF flags and return to original position
+    file.clear();
+    file.seekg(origPos);
+
+    return peekChar;
+  }
+
+  std::string ExtractWord() {
+    std::streampos origPos = file.tellg();
+
+    size_t len{0};
+    char currChar = PeekAtOffset(0);
+
+    while (IsValidChar(currChar)) {
+      currChar = PeekAtOffset(len);
+
+      if (IsValidChar(currChar))
+        len++;
+    }
+
+    std::string word(len, '\0');
+    file.read(&word[0], len);
+
+    // Clear EOF flags and return to original position
+    file.clear();
+    file.seekg(origPos);
+
+    return word;
+  }
+
+  auto SkipWord() {
+    auto word = ExtractWord();
+    auto len = word.length();
+
+    file.seekg(len, std::ios::cur);
+
+    // NOTE: Should we leave it to user to call SkipAllSpace?
+    // Intuitively, I expect this function to skip spaces, but not lines
+    SkipAllSpace(true);
+
+    auto offset = file.tellg();
+  }
+
+  std::ifstream &GetIfstream() { return file; }
+
+private:
+  std::ifstream file;
+  const char *currChar;
 };
 
 /* Private Functions */
-static std::vector<std::string> OpenFile(const char *path) {
-  std::ifstream inFile(path);
-
-  std::vector<std::string> strings;
-  if (!inFile) {
-    std::cerr << "Error opening file!" << std::endl;
-    return strings;
-  }
-
-  std::string line;
-  while (std::getline(inFile, line)) {
-    if (line.find("v ") != std::string::npos) {
-      strings.emplace_back(line);
-    }
-  }
-
-  inFile.close();
-
-  return strings;
+static inline void ParseVertex(std::string line, double &outX, double &outY,
+                               double &outZ) {
+  std::stringstream iss(line);
+  iss >> outX >> outY >> outZ;
 }
 
-[[maybe_unused]] static std::vector<float>
-ParseVertices(const std::vector<std::string> &strings) {
-  std::vector<float> vertices;
+/*
+TODO: Implement utility functions into streamwrapper, such that we can totally
+avoid creating strings. Useful utilities:
+- Seeking to a specific character
+- Getting position of specific character
+- Extracting words (deliminated by white space)
+- Skipping n chars
+*/
+static inline void ParseTriple(StreamWrapper &sw, Face face, size_t startPos) {}
 
-  for (const auto &str : strings) {
-    std::istringstream iss(str);
-    std::string word;
+} // namespace desobj
 
-    while (iss >> word) {
-      if (word != "v") {
-        vertices.emplace_back(std::stof(word));
-      }
-    }
-  }
-
-  return vertices;
-}
-
-/* Public Functions */
-inline Obj LoadObj(const char *path) {
-  const auto fileStrings = OpenFile(path);
-
-  Obj obj;
-  std::vector<float> *targetBuff = nullptr;
-
-  for (const auto &str : fileStrings) {
-    if (str.find("v ") != std::string::npos)
-      targetBuff = &obj.vertices;
-    else if (str.find("vn ") != std::string::npos)
-      targetBuff = &obj.normals;
-    else if (str.find("vt ") != std::string::npos)
-      targetBuff = &obj.uv;
-    else {
-      targetBuff = nullptr;
-      continue;
-    }
-
-    std::istringstream iss(str);
-    std::string word;
-
-    while (iss >> word) {
-      try {
-        targetBuff->emplace_back(std::stof(word));
-      }
-
-      catch (const std::invalid_argument &) {
-        std::cout << "NaN\n";
-        continue;
-      }
-    }
-  }
-
-  return obj;
-}
+#undef SW_EOF
+#endif

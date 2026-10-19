@@ -8,8 +8,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(
   ${PROJECT_NAME}
-  # src/main.cpp
-  src/main2.cpp
+  src/main.cpp
+  # src/main2.cpp
 )
 
 target_compile_definitions(
