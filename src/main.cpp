@@ -12,12 +12,6 @@ int main() {
 
   // sw.PrintDebug();
 
-  sw.SkipAllSpace(true);
-
-  sw.SkipWord();
-  std::cout << sw.ExtractWord() << '\n';
-  sw.SkipWord();
-  std::cout << sw.ExtractWord() << '\n';
-  sw.SkipWord();
-  std::cout << sw.ExtractWord() << '\n';
+  sw.SkipLine();
+  std::cout << sw.ExtractWord() << "\n";
 }

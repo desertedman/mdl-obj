@@ -59,19 +59,39 @@ public:
     return false;
   }
 
-  auto SeekToNextChar(const char c) {
-    size_t offset = 0;
+  auto FindCharOffset(const char c, bool skipCurrChar) {
+    int offset = 0;
+    if (skipCurrChar)
+      offset++;
+
     char currChar = PeekAtOffset(offset);
 
     while (currChar != c) {
+      currChar = PeekAtOffset(offset);
+      if (currChar == c)
+        break;
+
       // Char not found
-      if (currChar == '\0' || currChar == SW_EOF) {
-      }
+      else if (currChar == '\0' || currChar == SW_EOF)
+        return -1;
+
       offset++;
     }
+
+    return offset;
   }
 
-  auto SkipLine() {}
+  auto SkipLine() {
+    auto currChar = PeekAtOffset(0);
+
+    if (currChar == '\n')
+      file.ignore(1);
+
+    else {
+      auto nextPos = FindCharOffset('\n', true);
+      file.seekg(nextPos + 1, std::ios::cur);
+    }
+  }
 
   bool SkipAllSpace(bool skipLines = false) {
     int currChar{-1};
@@ -83,6 +103,16 @@ public:
       if (currChar == std::ifstream::traits_type::eof()) {
         std::cout << "end of file\n";
         return false;
+      }
+
+      // comment
+      else if (currChar == '#' && skipLines) {
+        SkipLine();
+      }
+
+      else if (currChar == '#' && !skipLines) {
+        std::cout << "end of line\n";
+        break;
       }
 
       else if (currChar == '\n' && skipLines) {
